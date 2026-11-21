@@ -10,7 +10,8 @@ Every Sunday at 00:00 IST (Saturday 18:30 UTC, GitHub cron `30 18 * * 6`) this
 repository runs one job per fuzz crate. Each job splits 5,400 seconds of
 libFuzzer time across its targets, at least 10 minutes per target, and uploads
 crashes plus new corpus entries as artifacts when a run fails. A separate job
-validates the documentation-only `aoheyra` repository.
+validates local documentation links and workflow syntax in the `aoheyra`
+repository.
 
 ## Crates
 
@@ -23,6 +24,15 @@ validates the documentation-only `aoheyra` repository.
 Each crate pins the sibling revision it fuzzes in `Cargo.toml` and commits a
 `Cargo.lock`. When a code repository changes its wire format or engine input
 surface, update the pinned revision and the target in the same PR.
+
+## Failure triage
+
+A failed fuzz job opens one labelled issue per crate and run, with the run URL,
+the last target started and the artifact name. The issue is assigned randomly
+from the org members hardcoded in `weekly-fuzz.yml`; update that list when
+membership changes. Re-running the same workflow does not create a duplicate
+issue for the same run and crate. The default `GITHUB_TOKEN` is sufficient; no
+repository secret is required.
 
 ## Adding or retiring a target
 

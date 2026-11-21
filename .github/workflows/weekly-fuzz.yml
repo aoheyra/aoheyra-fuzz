@@ -14,6 +14,9 @@ jobs:
     name: fuzz ${{ matrix.crate }}
     runs-on: ubuntu-latest
     timeout-minutes: 100
+    permissions:
+      contents: read
+      issues: write
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +37,7 @@ jobs:
         run: cargo install cargo-fuzz --locked
 
       - name: run every target for its share of the 90-minute budget
+        id: fuzz_run
         working-directory: fuzz/${{ matrix.crate }}
         run: |
           set -euo pipefail
@@ -48,6 +52,7 @@ jobs:
           remainder=$((total % n))
           for i in "${!targets[@]}"; do
             name=${targets[$i]}
+            echo "last_target=$name" >> "$GITHUB_OUTPUT"
             per=$base
             if [ "$i" -lt "$remainder" ]; then
               per=$((per + 1))
@@ -78,6 +83,61 @@ jobs:
             fuzz/${{ matrix.crate }}/artifacts/
             fuzz/${{ matrix.crate }}/corpus/
           if-no-files-found: ignore
+
+      - name: open a triage issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CRATE: ${{ matrix.crate }}
+          TARGET: ${{ steps.fuzz_run.outputs.last_target }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Hardcoded as of 2026-11-22. Update when org membership changes.
+          ASSIGNEES: |
+            Amanparashar-09
+            Divyansh089
+            GauravPawar101
+            hardev0007
+            nnitinmann45
+        run: |
+          set -euo pipefail
+          assignee=$(python3 - <<'PY'
+          import os
+          import secrets
+
+          members = [line.strip() for line in os.environ["ASSIGNEES"].splitlines() if line.strip()]
+          if not members:
+              raise SystemExit("no fuzz triage assignees configured")
+          print(secrets.choice(members))
+          PY
+          )
+          search="repo:aoheyra/aoheyra-fuzz in:title \"[FUZZ] $CRATE run $RUN_ID\""
+          existing=$(gh issue list --repo aoheyra/aoheyra-fuzz --state all --search "$search" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "triage issue #$existing already exists for $CRATE run $RUN_ID"
+            exit 0
+          fi
+          title="[FUZZ] $CRATE run $RUN_ID"
+          body=$(cat <<EOF
+          A scheduled fuzz job failed.
+
+          - Crate: \`$CRATE\`
+          - Last target: \`${TARGET:-unknown}\`
+          - Run: $RUN_URL
+          - Artifact: \`fuzz-findings-$CRATE\` on the failed run
+
+          Assigned randomly to @$assignee from the hardcoded org member list.
+
+          Inspect the crash artifact, reduce it to a minimal reproducer, and link the owning repository issue before closing this one.
+          EOF
+          )
+          gh issue create \
+            --repo aoheyra/aoheyra-fuzz \
+            --title "$title" \
+            --body "$body" \
+            --label type:fuzz \
+            --label prio:P0 \
+            --assignee "$assignee"
 
   aoheyra-docs:
     name: aoheyra docs integrity
