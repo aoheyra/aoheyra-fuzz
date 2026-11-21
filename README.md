@@ -1,27 +1,28 @@
 # aoheyra-fuzz
 
-Shared weekly fuzzing for the aoheyra repositories.
+Central weekly fuzzing scheduler for the aoheyra organisation.
 
 ## Schedule
 
-Every Sunday at 00:00 IST (Saturday 18:30 UTC, GitHub cron `30 18 * * 6`), the
-code repositories call the reusable workflow in this repo. Each repository gets
-a combined 90 minutes of libFuzzer execution, split evenly across its targets.
-The workflow allows a further ten minutes for checkout, nightly toolchain and
-`cargo-fuzz` installation.
+Every Sunday at 00:00 IST (Saturday 18:30 UTC, GitHub cron `30 18 * * 6`) this
+repository starts the 90-minute fuzz workflow in `aoMesh`, `aoNetwork` and
+`aoIdents`, and validates the documentation-only `aoheyra` repository.
 
-| Repository | Fuzz targets |
+Each code repository splits 5,400 seconds of libFuzzer time across its own
+targets and uploads crashes plus new corpus entries as artifacts when a run
+fails. The target list stays in each repository so it owns its fuzz surface.
+
+## Required secret
+
+`FUZZ_DISPATCH_TOKEN` must be a repository secret with `Actions: write` on the
+three code repositories. The default `GITHUB_TOKEN` is scoped to this repository
+and cannot dispatch workflows elsewhere.
+
+## Repositories
+
+| Repository | Weekly job |
 |---|---|
-| aoMesh | `packet_decode`, `engine_input`, `sync_frames` |
-| aoNetwork | all `fuzz/fuzz_targets/*.rs` targets |
-| aoIdents | all `fuzz/fuzz_targets/*.rs` targets |
-
-The `aoheyra` application repo currently contains documentation only; it has no
-Rust crate or fuzz targets yet and is not dispatched.
-
-## Reusable workflow
-
-`.github/workflows/fuzz-runner.yml` accepts a newline-separated list of target
-names and runs them from the caller's checkout. Crashes and new corpus entries
-are uploaded as artifacts when a run fails. Keep target lists in the caller
-workflows so each repo owns its own fuzz surface.
+| aoMesh | 5,400 seconds across `fuzz/fuzz_targets/*.rs` |
+| aoNetwork | 5,400 seconds across `fuzz/fuzz_targets/*.rs` |
+| aoIdents | 5,400 seconds across `fuzz/fuzz_targets/*.rs` |
+| aoheyra | documentation link and workflow syntax validation (docs-only repo) |
