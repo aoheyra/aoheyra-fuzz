@@ -1,0 +1,34 @@
+[package]
+name = "ao_network_fuzz"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ao_network = { git = "https://github.com/aoheyra/aoNetwork" }
+
+[[bin]]
+name = "beacon_decode"
+path = "fuzz_targets/beacon_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "frame_decode"
+path = "fuzz_targets/frame_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "reassembler_push"
+path = "fuzz_targets/reassembler_push.rs"
+test = false
+doc = false
+
+[workspace]
+members = ["."]
