@@ -10,32 +10,74 @@ permissions:
   contents: read
 
 jobs:
-  dispatch:
-    name: dispatch ${{ matrix.repo }}
+  fuzz:
+    name: fuzz ${{ matrix.crate }}
     runs-on: ubuntu-latest
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
         include:
-          - repo: aoMesh
-            workflow: fuzz.yml
-          - repo: aoNetwork
-            workflow: fuzz.yml
-          - repo: aoIdents
-            workflow: fuzz.yml
+          - crate: ao-mesh-fuzz
+          - crate: ao-network-fuzz
+          - crate: ao-idents-fuzz
     steps:
-      - name: start the 90-minute fuzz run in ${{ matrix.repo }}
-        uses: actions/github-script@v7
+      - name: checkout fuzz repository
+        uses: actions/checkout@v4
+
+      - name: install nightly with sanitizer support
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          github-token: ${{ secrets.FUZZ_DISPATCH_TOKEN }}
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: 'aoheyra',
-              repo: '${{ matrix.repo }}',
-              workflow_id: '${{ matrix.workflow }}',
-              ref: 'master',
-              inputs: { duration_seconds: '5400' }
-            })
+          components: llvm-tools-preview, rust-src
+
+      - name: install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: run every target for its share of the 90-minute budget
+        working-directory: fuzz/${{ matrix.crate }}
+        run: |
+          set -euo pipefail
+          total=5400
+          mapfile -t targets < <(find fuzz_targets -maxdepth 1 -name '*.rs' -printf '%f\n' | sed 's/\.rs$//' | sort)
+          n=${#targets[@]}
+          if [ "$n" -eq 0 ]; then
+            echo 'no fuzz targets found' >&2
+            exit 1
+          fi
+          base=$((total / n))
+          remainder=$((total % n))
+          for i in "${!targets[@]}"; do
+            name=${targets[$i]}
+            per=$base
+            if [ "$i" -lt "$remainder" ]; then
+              per=$((per + 1))
+            fi
+            echo "== $name (${per}s)"
+            mkdir -p "corpus/$name"
+            if [ -d "seeds/$name" ]; then
+              cargo +nightly fuzz run "$name" "corpus/$name" "seeds/$name" -- \
+                -max_total_time="$per" \
+                -rss_limit_mb=2048 \
+                -timeout=10 \
+                -max_len=16384
+            else
+              cargo +nightly fuzz run "$name" "corpus/$name" -- \
+                -max_total_time="$per" \
+                -rss_limit_mb=2048 \
+                -timeout=10 \
+                -max_len=16384
+            fi
+          done
+
+      - name: upload crashes and corpus
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-findings-${{ matrix.crate }}
+          path: |
+            fuzz/${{ matrix.crate }}/artifacts/
+            fuzz/${{ matrix.crate }}/corpus/
+          if-no-files-found: ignore
 
   aoheyra-docs:
     name: aoheyra docs integrity
