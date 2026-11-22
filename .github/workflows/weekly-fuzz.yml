@@ -146,8 +146,8 @@ jobs:
       - name: checkout docs repository
         uses: actions/checkout@v4
         with:
-          repository: aoheyra/aoheyra
-          ref: master
+          repository: aoheyra/aoheyra-docs
+          ref: main
 
       - name: check local documentation links and workflow syntax
         run: |
