@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: aoheyra/aoheyra-fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   fuzz:
     name: fuzz ${{ matrix.crate }}
@@ -140,6 +144,7 @@ jobs:
             --assignee "$assignee"
 
   aoheyra-docs:
+    if: github.repository == 'aoheyra/aoheyra-fuzz' || github.event_name == 'pull_request'
     name: aoheyra docs integrity
     runs-on: ubuntu-latest
     steps:
